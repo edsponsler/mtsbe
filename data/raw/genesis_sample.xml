@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osis xmlns="http://www.bibletechnologies.net/2003/OSIS/namespace">
+  <osisText osisIDWork="STEPBible" xml:lang="en">
+    <div type="book" osisID="Gen">
+      <title>Genesis</title>
+      <chapter osisID="Gen.22">
+        <div type="section">
+            <title>The Binding of Isaac (Akedah)</title>
+            <verse osisID="Gen.22.1">After these things God tested Abraham, and said to him, "Abraham!" And he said, "Here I am."</verse>
+            <verse osisID="Gen.22.2">He said, "Take your son, your only son Isaac, whom you love, and go to the land of Moriah, and offer him there as a burnt offering on one of the mountains of which I shall tell you."</verse>
+        </div>
+      </chapter>
+    </div>
+  </osisText>
+</osis>

@@ -1,0 +1,30 @@
+[
+  {
+    "type": "midrash",
+    "refs": [
+      "Genesis 2:1",
+      "Genesis Rabbah 10:1"
+    ]
+  },
+  {
+    "type": "midrash",
+    "refs": [
+      "Genesis Rabbah 10:4",
+      "Genesis 2:1"
+    ]
+  },
+  {
+    "type": "midrash",
+    "refs": [
+      "Genesis 2:2",
+      "Genesis Rabbah 10:9"
+    ]
+  },
+  {
+    "type": "commentary",
+    "refs": [
+      "Genesis 2:2",
+      "Rashi on Genesis 2:2:1"
+    ]
+  }
+]

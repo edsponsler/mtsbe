@@ -1,0 +1,43 @@
+[
+  {
+    "id": "gen-22-1-2-pericope",
+    "type": "pericope",
+    "corpus": "biblical",
+    "book": "Genesis",
+    "chapter_start": 22,
+    "verse_start": 1,
+    "chapter_end": 22,
+    "verse_end": 2,
+    "pericope_title": "The Binding of Isaac (Akedah)",
+    "text": "After these things God tested Abraham, and said to him, \"Abraham!\" And he said, \"Here I am.\" He said, \"Take your son, your only son Isaac, whom you love, and go to the land of Moriah, and offer him there as a burnt offering on one of the mountains of which I shall tell you.\"",
+    "child_verse_ids": [
+      "gen-22-1",
+      "gen-22-2"
+    ],
+    "external_links": {
+      "midrash": [],
+      "church_fathers": [],
+      "secular": []
+    }
+  },
+  {
+    "id": "gen-22-1",
+    "type": "verse",
+    "corpus": "biblical",
+    "book": "Genesis",
+    "chapter": 22,
+    "verse": 1,
+    "text": "After these things God tested Abraham, and said to him, \"Abraham!\" And he said, \"Here I am.\"",
+    "parent_pericope_id": "gen-22-1-2-pericope"
+  },
+  {
+    "id": "gen-22-2",
+    "type": "verse",
+    "corpus": "biblical",
+    "book": "Genesis",
+    "chapter": 22,
+    "verse": 2,
+    "text": "He said, \"Take your son, your only son Isaac, whom you love, and go to the land of Moriah, and offer him there as a burnt offering on one of the mountains of which I shall tell you.\"",
+    "parent_pericope_id": "gen-22-1-2-pericope"
+  }
+]
