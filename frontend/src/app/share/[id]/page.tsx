@@ -13,6 +13,7 @@ interface SourceContext {
 
 interface NarrativeResponse {
   share_id?: string;
+  model_used?: string;
   narrative: string;
   sources: SourceContext[];
 }
@@ -75,13 +76,20 @@ export default function SharedNarrative() {
       {result && !isLoading && (
         <div className="results-container">
           <div className="narrative-card">
-            <h3 className="narrative-title">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-              </svg>
-              Synthesized Narrative
-            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+              <h3 className="narrative-title" style={{ margin: 0 }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                </svg>
+                Synthesized Narrative
+              </h3>
+              {result.model_used && (
+                <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.6rem', borderRadius: '12px', background: 'rgba(212, 175, 55, 0.15)', color: '#d4af37', border: '1px solid rgba(212, 175, 55, 0.3)', fontWeight: '500' }}>
+                  {result.model_used}
+                </span>
+              )}
+            </div>
             <button 
               className="search-button" 
               style={{ position: 'absolute', top: '2rem', right: '2rem', padding: '0.5rem 1rem', fontSize: '0.9rem' }}

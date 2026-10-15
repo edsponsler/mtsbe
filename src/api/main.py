@@ -63,6 +63,7 @@ def get_db_connection():
 class QueryRequest(BaseModel):
     query: str
     num_results: int = 3
+    model: str | None = None
 
 class SourceContext(BaseModel):
     id: str
@@ -73,6 +74,7 @@ class SourceContext(BaseModel):
 
 class NarrativeResponse(BaseModel):
     share_id: str | None = None
+    model_used: str | None = None
     narrative: str
     sources: list[SourceContext]
 
@@ -152,8 +154,10 @@ historical/legendary traditions without breaking dramatic immersion.
         
         prompt = f"{context_str}\n\nUser Request: {request.query}\n\nGenerate the contextual narrative:"
         
+        target_model = request.model or os.environ.get("NARRATIVE_MODEL", "gemini-4-argon")
+        
         generation = ai_client.models.generate_content(
-            model="gemini-3.8-flash",
+            model=target_model,
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
@@ -163,6 +167,7 @@ historical/legendary traditions without breaking dramatic immersion.
 
         response_data = NarrativeResponse(
             share_id=str(uuid.uuid4()),
+            model_used=target_model,
             narrative=generation.text,
             sources=sources
         )

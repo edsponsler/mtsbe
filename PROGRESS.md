@@ -15,10 +15,10 @@
   * **Phase 4 (Application Logic / API):**
     * Built FastAPI backend (`src/api/main.py`) executing two-stage Retrieval-Augmented Generation (RAG) using `gemini-3.8-flash` via Vertex AI.
   * **Phase 5 (Review, Refinement & Full-Stack UI):**
-    * **Model & Embedding Tuning:** Transitioned generation to `gemini-3.8-flash` and embeddings to `gemini-embedding-2` under Vertex AI `us` multi-region for reduced latency and budget efficiency.
+    * **Model & Embedding Tuning:** Integrated **Gemini 4 Argon** (`gemini-4-argon`) via Vertex AI `us` multi-region for superior creative writing, complex theological reasoning, and multi-perspective narrative synthesis, paired with `gemini-embedding-2` for dense retrieval. Added model selection metadata to both API and UI.
     * **Dual-Language Corpus Support (BSB & Hebrew):** Developed `src/ingest_bsb.py` to ingest the modern, open Berean Standard Bible (BSB), adding `english_text` columns across pericopes and verses while preserving original Hebrew.
     * **Shareable Narratives (GCS):** Integrated Google Cloud Storage (`mtsbe-narratives-1208613`) to persist synthesized narratives and added `/shared/{share_id}` endpoint.
-    * **Interactive Next.js Frontend:** Scaffolded a scholarly Next.js client (`frontend/`) supporting live queries, synthesized narrative display, copy-to-clipboard sharing, and canonical source cards with expandable RTL Hebrew text.
+    * **Interactive Next.js Frontend:** Scaffolded a scholarly Next.js client (`frontend/`) supporting live queries, synthesized narrative display, copy-to-clipboard sharing, model provenance badges, and canonical source cards with expandable RTL Hebrew text.
     * **Local Development Automation:** Added `start_dev.sh` to orchestrate `cloud-sql-proxy`, `uvicorn`, and `next dev` concurrently.
     * **Granular Pericope Segmentation:** Created `src/etl/ingest_granular_pericopes.py` to parse official Berean Standard Bible section headings (`bsb_tables.tsv`). Expanded Genesis from 50 coarse chapter chunks into 148 granular narrative pericopes (e.g., separating Gen 18 into *The Three Visitors*, *Sarah Laughs at the Promise*, and *Abraham Intercedes for Sodom*). Generated 768-dim embeddings for all 148 pericopes using `gemini-embedding-2` via Vertex AI and updated relational foreign key alignments across all 1,533 verses.
 
