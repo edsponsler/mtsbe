@@ -1,9 +1,6 @@
 # Ignore large data files
-data/raw/Gen.xml
-data/processed/genesis_full.json
-data/processed/genesis_linked.json
-data/processed/output.json
-data/processed/genesis_embedded.json
+data/raw/
+data/processed/
 
 # Python
 .venv/

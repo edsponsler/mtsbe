@@ -20,19 +20,17 @@
     * **Shareable Narratives (GCS):** Integrated Google Cloud Storage (`mtsbe-narratives-1208613`) to persist synthesized narratives and added `/shared/{share_id}` endpoint.
     * **Interactive Next.js Frontend:** Scaffolded a scholarly Next.js client (`frontend/`) supporting live queries, synthesized narrative display, copy-to-clipboard sharing, and canonical source cards with expandable RTL Hebrew text.
     * **Local Development Automation:** Added `start_dev.sh` to orchestrate `cloud-sql-proxy`, `uvicorn`, and `next dev` concurrently.
-    * **Repository Cleanup:** Cleaned up temporary test scripts and sample data files, and pinned dependencies in `requirements.txt`.
+    * **Granular Pericope Segmentation:** Created `src/etl/ingest_granular_pericopes.py` to parse official Berean Standard Bible section headings (`bsb_tables.tsv`). Expanded Genesis from 50 coarse chapter chunks into 148 granular narrative pericopes (e.g., separating Gen 18 into *The Three Visitors*, *Sarah Laughs at the Promise*, and *Abraham Intercedes for Sodom*). Generated 768-dim embeddings for all 148 pericopes using `gemini-embedding-2` via Vertex AI and updated relational foreign key alignments across all 1,533 verses.
 
 ## Crucial Context & Budget Guidelines
 * **Cost Constraint:** Strict $1,000 budget for GCP architectural iterations/PoC, and $1,000 reserved for operational use.
 * **Billing Strategy (Vertex AI):** All Gemini SDK calls are routed through the **Vertex AI backend** (`vertexai=True` in `google-genai` client, region `us`) to consume GenAI App Builder and general GCP credits.
-* **Granular Pericopes Technical Debt:** Genesis is currently chunked at the chapter level (50 pericopes). To achieve granular story-level pericope boundaries (e.g. "The Binding of Isaac"), future ETL will ingest an English OSIS XML with editorial section headings.
+* **Granular Pericopes Resolution:** Genesis now has full sub-chapter narrative boundaries (148 pericopes). Future biblical book additions can follow this same BSB translation tables pipeline.
 
 ## Immediate Next Steps
 1. **Corpus & Tradition Expansion ("Multi-Tradition" Core):**
-   * Ingest remaining books of the Torah / Old Testament or New Testament.
+   * Ingest remaining books of the Torah / Old Testament or New Testament using the BSB granular pipeline.
    * Ingest extra-biblical traditions: Early Church Fathers (via CCEL) and Josephus (via Perseus) to realize multi-tradition cross-commentary.
-2. **Granular Pericope Headings:**
-   * Ingest an English OSIS XML with sub-chapter story headings (e.g., STEPBible or WEB) so pericopes represent specific stories rather than full chapters.
-3. **Production Deployment:**
+2. **Production Deployment:**
    * Containerize FastAPI backend and Next.js frontend for Cloud Run deployment with Cloud SQL connection integration.
 
