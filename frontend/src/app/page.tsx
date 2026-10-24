@@ -11,6 +11,17 @@ interface SourceContext {
   midrash_links: string[];
 }
 
+interface CommentaryContext {
+  id: string;
+  tradition: string; // 'midrash' | 'patristic' | 'historical'
+  author: string;
+  work: string;
+  reference: string;
+  title: string;
+  text: string;
+  original_language_text?: string | null;
+}
+
 interface PerspectiveConfig {
   include_midrash: boolean;
   include_patristic: boolean;
@@ -24,6 +35,7 @@ interface NarrativeResponse {
   perspectives?: PerspectiveConfig;
   narrative: string;
   sources: SourceContext[];
+  commentaries?: CommentaryContext[];
 }
 
 export default function Home() {
@@ -94,6 +106,7 @@ export default function Home() {
               perspectives: event.perspectives,
               narrative: "",
               sources: event.sources || [],
+              commentaries: event.commentaries || [],
             });
           } else if (event.type === "chunk") {
             setResult((prev) => {
@@ -340,7 +353,7 @@ export default function Home() {
           </div>
 
           <aside className="sources-container">
-            <h4 className="sources-header">Canonical Sources</h4>
+            <h4 className="sources-header">Canonical Scripture ({result.sources.length})</h4>
             {result.sources.map((source, index) => (
               <div key={index} className="source-card">
                 <h5 className="source-title">{source.title}</h5>
@@ -348,17 +361,43 @@ export default function Home() {
                 <p className="source-text">{source.text}</p>
                 {source.hebrew_text && (
                   <details style={{marginTop: '1rem', cursor: 'pointer', fontSize: '0.85rem', color: 'rgba(212, 175, 55, 0.8)'}}>
-                    <summary style={{fontWeight: '500'}}>View Original Language</summary>
+                    <summary style={{fontWeight: '500'}}>View Original Language (Hebrew)</summary>
                     <p style={{marginTop: '0.5rem', fontFamily: 'serif', direction: 'rtl', textAlign: 'right', fontSize: '1.2rem', lineHeight: '1.6'}}>{source.hebrew_text}</p>
                   </details>
                 )}
               </div>
             ))}
+
+            {result.commentaries && result.commentaries.length > 0 && (
+              <>
+                <h4 className="sources-header source-section-divider">Ancient Traditions & Commentaries ({result.commentaries.length})</h4>
+                {result.commentaries.map((comm, index) => (
+                  <div key={index} className="source-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <span className={`commentary-badge ${comm.tradition}`}>
+                        {comm.tradition === 'midrash' ? '📜 Midrash' : comm.tradition === 'patristic' ? '✝️ Patristic' : '🏛️ Historical'}
+                      </span>
+                      <span className="source-id" style={{ margin: 0, textTransform: 'none' }}>{comm.reference}</span>
+                    </div>
+                    <h5 className="source-title" style={{ fontSize: '1.05rem' }}>{comm.title}</h5>
+                    <div className="commentary-author">{comm.author} — {comm.work}</div>
+                    <p className="source-text" style={{ WebkitLineClamp: 5 }}>{comm.text}</p>
+                    {comm.original_language_text && (
+                      <details style={{marginTop: '1rem', cursor: 'pointer', fontSize: '0.85rem', color: 'rgba(212, 175, 55, 0.8)'}}>
+                        <summary style={{fontWeight: '500'}}>View Original Language</summary>
+                        <p style={{marginTop: '0.5rem', fontFamily: 'serif', direction: 'rtl', textAlign: 'right', fontSize: '1.15rem', lineHeight: '1.6'}}>{comm.original_language_text}</p>
+                      </details>
+                    )}
+                  </div>
+                ))}
+              </>
+            )}
           </aside>
         </div>
       )}
     </main>
   );
 }
+
 
 

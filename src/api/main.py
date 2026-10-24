@@ -80,12 +80,23 @@ class SourceContext(BaseModel):
     hebrew_text: str
     midrash_links: list
 
+class CommentaryContext(BaseModel):
+    id: str
+    tradition: str
+    author: str
+    work: str
+    reference: str
+    title: str
+    text: str
+    original_language_text: str | None = None
+
 class NarrativeResponse(BaseModel):
     share_id: str | None = None
     model_used: str | None = None
     perspectives: PerspectiveConfig | None = None
     narrative: str
     sources: list[SourceContext]
+    commentaries: list[CommentaryContext] = []
 
 def build_system_instruction(perspectives: PerspectiveConfig) -> str:
     layers = ["1. Biblical Anchor: Ground the core action strictly in the retrieved pericope text."]
@@ -153,7 +164,7 @@ Synthesize the provided biblical narrative with its ancient interpretive and cul
 {tone_instruction}
 """
 
-def retrieve_context(query: str, num_results: int = 3):
+def retrieve_context(query: str, num_results: int = 3, perspectives: PerspectiveConfig = PerspectiveConfig()):
     if not ai_client:
         raise HTTPException(status_code=500, detail="Vertex AI client not initialized. Check ADC credentials.")
 
@@ -168,32 +179,28 @@ def retrieve_context(query: str, num_results: int = 3):
     )
     query_embedding = embed_response.embeddings[0].values
 
-    # Step 2: Retrieve relevant pericopes using pgvector
+    # Step 2: Retrieve relevant biblical pericopes using pgvector
     conn = get_db_connection()
     cur = conn.cursor()
     
-    # We use <-> for L2 distance (or <=> for cosine distance). HNSW index uses vector_l2_ops by default.
     cur.execute("""
         SELECT id, pericope_title, english_text, text as hebrew_text, external_links, embedding <-> %s::vector AS distance
         FROM pericopes
         ORDER BY distance LIMIT %s
     """, (query_embedding, num_results))
     
-    results = cur.fetchall()
-    cur.close()
-    conn.close()
+    pericope_results = cur.fetchall()
 
-    if not results:
-        raise HTTPException(status_code=404, detail="No relevant context found.")
+    if not pericope_results:
+        cur.close()
+        conn.close()
+        raise HTTPException(status_code=404, detail="No relevant biblical context found.")
 
-    # Step 3: Format the context for the LLM
     sources = []
     context_str = "--- BIBLICAL CONTEXT ---\n"
-    for row in results:
+    for row in pericope_results:
         p_id, title, english_text, hebrew_text, links, dist = row
         midrash = links.get('midrash', []) if isinstance(links, dict) else []
-        
-        # Use english_text if available, fallback to hebrew_text for safety
         display_text = english_text if english_text else hebrew_text
 
         sources.append(SourceContext(
@@ -205,15 +212,51 @@ def retrieve_context(query: str, num_results: int = 3):
         ))
         
         context_str += f"\nPericope: {title}\nText: {display_text}\n"
-        if midrash:
-            context_str += f"Associated Midrash references: {', '.join(midrash)}\n"
 
-    return sources, context_str
+    # Step 3: Retrieve grounded ancient commentaries & historical sources based on active perspective filters
+    active_traditions = []
+    if perspectives.include_midrash:
+        active_traditions.append('midrash')
+    if perspectives.include_patristic:
+        active_traditions.append('patristic')
+    if perspectives.include_historical:
+        active_traditions.append('historical')
+
+    commentaries = []
+    if active_traditions:
+        cur.execute("""
+            SELECT id, tradition, author, work, reference, title, text, original_language_text, embedding <-> %s::vector AS distance
+            FROM commentaries
+            WHERE tradition = ANY(%s)
+            ORDER BY distance LIMIT %s
+        """, (query_embedding, active_traditions, 4))
+        comm_results = cur.fetchall()
+
+        if comm_results:
+            context_str += "\n--- GROUNDED ANCIENT COMMENTARIES & HISTORICAL TRADITIONS ---\n"
+            for row in comm_results:
+                cid, trad, author, work, ref, ctitle, ctext, orig_lang, dist = row
+                commentaries.append(CommentaryContext(
+                    id=cid,
+                    tradition=trad,
+                    author=author or "",
+                    work=work or "",
+                    reference=ref or "",
+                    title=ctitle or "",
+                    text=ctext,
+                    original_language_text=orig_lang
+                ))
+                context_str += f"\n[TRADITION: {trad.upper()} | SOURCE: {author} - {ref}]\nTitle: {ctitle}\nText: {ctext[:1500]}\n"
+
+    cur.close()
+    conn.close()
+
+    return sources, commentaries, context_str
 
 @app.post("/generate", response_model=NarrativeResponse)
 def generate_narrative(request: QueryRequest):
     try:
-        sources, context_str = retrieve_context(request.query, request.num_results)
+        sources, commentaries, context_str = retrieve_context(request.query, request.num_results, request.perspectives)
         prompt = f"{context_str}\n\nUser Request: {request.query}\n\nGenerate the contextual narrative:"
         target_model = request.model or os.environ.get("NARRATIVE_MODEL", "gemini-4-argon")
         system_instruction = build_system_instruction(request.perspectives)
@@ -232,7 +275,8 @@ def generate_narrative(request: QueryRequest):
             model_used=target_model,
             perspectives=request.perspectives,
             narrative=generation.text,
-            sources=sources
+            sources=sources,
+            commentaries=commentaries
         )
 
         if bucket:
@@ -252,20 +296,21 @@ def generate_narrative(request: QueryRequest):
 @app.post("/generate/stream")
 def generate_narrative_stream(request: QueryRequest):
     try:
-        sources, context_str = retrieve_context(request.query, request.num_results)
+        sources, commentaries, context_str = retrieve_context(request.query, request.num_results, request.perspectives)
         prompt = f"{context_str}\n\nUser Request: {request.query}\n\nGenerate the contextual narrative:"
         target_model = request.model or os.environ.get("NARRATIVE_MODEL", "gemini-4-argon")
         share_id = str(uuid.uuid4())
         system_instruction = build_system_instruction(request.perspectives)
 
         def event_stream():
-            # Emit immediate metadata event so frontend renders canonical source cards and perspective tags instantly
+            # Emit immediate metadata event with canonical sources AND grounded commentary cards
             init_payload = {
                 "type": "metadata",
                 "share_id": share_id,
                 "model_used": target_model,
                 "perspectives": request.perspectives.model_dump(),
-                "sources": [s.model_dump() for s in sources]
+                "sources": [s.model_dump() for s in sources],
+                "commentaries": [c.model_dump() for c in commentaries]
             }
             yield f"data: {json.dumps(init_payload)}\n\n"
 
@@ -298,7 +343,8 @@ def generate_narrative_stream(request: QueryRequest):
                             model_used=target_model,
                             perspectives=request.perspectives,
                             narrative=completed_text,
-                            sources=sources
+                            sources=sources,
+                            commentaries=commentaries
                         )
                         blob = bucket.blob(f"{share_id}.json")
                         blob.upload_from_string(narrative_obj.model_dump_json(), content_type="application/json")
