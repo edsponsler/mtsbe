@@ -11,9 +11,17 @@ interface SourceContext {
   midrash_links: string[];
 }
 
+interface PerspectiveConfig {
+  include_midrash: boolean;
+  include_patristic: boolean;
+  include_historical: boolean;
+  narrative_tone: "dramatic" | "scholarly" | "meditative";
+}
+
 interface NarrativeResponse {
   share_id?: string;
   model_used?: string;
+  perspectives?: PerspectiveConfig;
   narrative: string;
   sources: SourceContext[];
 }
@@ -24,6 +32,12 @@ export default function Home() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [result, setResult] = useState<NarrativeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Perspective Controls State (Priority B)
+  const [includeMidrash, setIncludeMidrash] = useState(true);
+  const [includePatristic, setIncludePatristic] = useState(true);
+  const [includeHistorical, setIncludeHistorical] = useState(true);
+  const [narrativeTone, setNarrativeTone] = useState<"dramatic" | "scholarly" | "meditative">("dramatic");
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,6 +57,12 @@ export default function Home() {
         body: JSON.stringify({
           query: query.trim(),
           num_results: 3,
+          perspectives: {
+            include_midrash: includeMidrash,
+            include_patristic: includePatristic,
+            include_historical: includeHistorical,
+            narrative_tone: narrativeTone,
+          },
         }),
       });
 
@@ -71,6 +91,7 @@ export default function Home() {
             setResult({
               share_id: event.share_id,
               model_used: event.model_used,
+              perspectives: event.perspectives,
               narrative: "",
               sources: event.sources || [],
             });
@@ -145,6 +166,93 @@ export default function Home() {
         </form>
       </div>
 
+      {/* Perspective & Tone Controls Toolbar */}
+      <div className="perspectives-toolbar">
+        <div className="perspective-row">
+          <span className="perspective-label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+            </svg>
+            Tradition Lenses
+          </span>
+          <div className="perspective-chips">
+            <button
+              type="button"
+              className={`lens-toggle-btn ${includeMidrash ? "active" : ""}`}
+              onClick={() => setIncludeMidrash(!includeMidrash)}
+              disabled={isLoading || isStreaming}
+              title="Toggle Rabbinic Midrash (Midrash Rabbah, Tanchuma, Talmudic Aggadah)"
+            >
+              <span className="lens-icon">📜</span>
+              <span>Midrash</span>
+              <span className="lens-status">{includeMidrash ? "ON" : "OFF"}</span>
+            </button>
+
+            <button
+              type="button"
+              className={`lens-toggle-btn ${includePatristic ? "active" : ""}`}
+              onClick={() => setIncludePatristic(!includePatristic)}
+              disabled={isLoading || isStreaming}
+              title="Toggle Patristic Typology (Early Church Fathers, Christological/Sacramental symbols)"
+            >
+              <span className="lens-icon">✝️</span>
+              <span>Patristic</span>
+              <span className="lens-status">{includePatristic ? "ON" : "OFF"}</span>
+            </button>
+
+            <button
+              type="button"
+              className={`lens-toggle-btn ${includeHistorical ? "active" : ""}`}
+              onClick={() => setIncludeHistorical(!includeHistorical)}
+              disabled={isLoading || isStreaming}
+              title="Toggle Material & Historical Reality (Flavius Josephus, Roman/Near Eastern context)"
+            >
+              <span className="lens-icon">🏛️</span>
+              <span>Josephus</span>
+              <span className="lens-status">{includeHistorical ? "ON" : "OFF"}</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="perspective-row">
+          <span className="perspective-label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            Voice & Tone
+          </span>
+          <div className="tone-pills">
+            <button
+              type="button"
+              className={`tone-pill ${narrativeTone === "dramatic" ? "active" : ""}`}
+              onClick={() => setNarrativeTone("dramatic")}
+              disabled={isLoading || isStreaming}
+              title="Immersive, evocative literary narrative"
+            >
+              🎭 Dramatic Story
+            </button>
+            <button
+              type="button"
+              className={`tone-pill ${narrativeTone === "scholarly" ? "active" : ""}`}
+              onClick={() => setNarrativeTone("scholarly")}
+              disabled={isLoading || isStreaming}
+              title="Comparative exegetical commentary"
+            >
+              📖 Scholarly Exegesis
+            </button>
+            <button
+              type="button"
+              className={`tone-pill ${narrativeTone === "meditative" ? "active" : ""}`}
+              onClick={() => setNarrativeTone("meditative")}
+              disabled={isLoading || isStreaming}
+              title="Contemplative, devotional reflection"
+            >
+              🕊️ Contemplative
+            </button>
+          </div>
+        </div>
+      </div>
+
       {error && (
         <div className="error-message">
           {error}
@@ -173,6 +281,22 @@ export default function Home() {
                 <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.6rem', borderRadius: '12px', background: 'rgba(212, 175, 55, 0.15)', color: '#d4af37', border: '1px solid rgba(212, 175, 55, 0.3)', fontWeight: '500' }}>
                   {result.model_used}
                 </span>
+              )}
+              {result.perspectives && (
+                <div className="perspective-badges-row">
+                  {result.perspectives.include_midrash && (
+                    <span className="perspective-tag active-lens">📜 Midrash</span>
+                  )}
+                  {result.perspectives.include_patristic && (
+                    <span className="perspective-tag active-lens">✝️ Patristic</span>
+                  )}
+                  {result.perspectives.include_historical && (
+                    <span className="perspective-tag active-lens">🏛️ Josephus</span>
+                  )}
+                  <span className="perspective-tag tone-tag">
+                    {result.perspectives.narrative_tone === "scholarly" ? "📖 Scholarly" : result.perspectives.narrative_tone === "meditative" ? "🕊️ Contemplative" : "🎭 Dramatic"}
+                  </span>
+                </div>
               )}
               {isStreaming && (
                 <span className="streaming-badge">

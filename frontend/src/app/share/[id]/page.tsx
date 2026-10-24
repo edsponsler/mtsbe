@@ -11,9 +11,17 @@ interface SourceContext {
   midrash_links: string[];
 }
 
+interface PerspectiveConfig {
+  include_midrash: boolean;
+  include_patristic: boolean;
+  include_historical: boolean;
+  narrative_tone: "dramatic" | "scholarly" | "meditative";
+}
+
 interface NarrativeResponse {
   share_id?: string;
   model_used?: string;
+  perspectives?: PerspectiveConfig;
   narrative: string;
   sources: SourceContext[];
 }
@@ -88,6 +96,22 @@ export default function SharedNarrative() {
                 <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.6rem', borderRadius: '12px', background: 'rgba(212, 175, 55, 0.15)', color: '#d4af37', border: '1px solid rgba(212, 175, 55, 0.3)', fontWeight: '500' }}>
                   {result.model_used}
                 </span>
+              )}
+              {result.perspectives && (
+                <div className="perspective-badges-row">
+                  {result.perspectives.include_midrash && (
+                    <span className="perspective-tag active-lens">📜 Midrash</span>
+                  )}
+                  {result.perspectives.include_patristic && (
+                    <span className="perspective-tag active-lens">✝️ Patristic</span>
+                  )}
+                  {result.perspectives.include_historical && (
+                    <span className="perspective-tag active-lens">🏛️ Josephus</span>
+                  )}
+                  <span className="perspective-tag tone-tag">
+                    {result.perspectives.narrative_tone === "scholarly" ? "📖 Scholarly" : result.perspectives.narrative_tone === "meditative" ? "🕊️ Contemplative" : "🎭 Dramatic"}
+                  </span>
+                </div>
               )}
             </div>
             <button 

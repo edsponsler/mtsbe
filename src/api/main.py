@@ -61,10 +61,17 @@ def get_db_connection():
     return conn
 
 # Request/Response Models
+class PerspectiveConfig(BaseModel):
+    include_midrash: bool = True
+    include_patristic: bool = True
+    include_historical: bool = True
+    narrative_tone: str = "dramatic"  # "dramatic", "scholarly", "meditative"
+
 class QueryRequest(BaseModel):
     query: str
     num_results: int = 3
     model: str | None = None
+    perspectives: PerspectiveConfig = PerspectiveConfig()
 
 class SourceContext(BaseModel):
     id: str
@@ -76,23 +83,74 @@ class SourceContext(BaseModel):
 class NarrativeResponse(BaseModel):
     share_id: str | None = None
     model_used: str | None = None
+    perspectives: PerspectiveConfig | None = None
     narrative: str
     sources: list[SourceContext]
 
-SYSTEM_INSTRUCTION = """
-You are an expert biblical historian, exegete, and narrative writer.
-Synthesize the provided biblical narrative with its ancient interpretive and cultural layers:
+def build_system_instruction(perspectives: PerspectiveConfig) -> str:
+    layers = ["1. Biblical Anchor: Ground the core action strictly in the retrieved pericope text."]
+    layer_num = 2
 
-1. Biblical Anchor: Ground the core action strictly in the retrieved pericope text.
-2. Jewish Midrashic Layer (OT): Introduce rabbinic motifs, psychological subtext, 
-   and dialogues recorded in Midrash Rabbah or Tanchuma (e.g., Satan's testing, Sarah's perspective).
-3. Patristic Typology (NT): Weave in the theological and symbolic lens of the Early 
-   Church Fathers where relevant (e.g., sacrificial imagery, prophetic fulfillment).
-4. Material & Political Reality (Josephus): Ground the setting, sensory details, 
-   military realities, topography, and political tensions using the historical records of Flavius Josephus.
+    if perspectives.include_midrash:
+        layers.append(
+            f"{layer_num}. Jewish Midrashic Layer (OT): Introduce rabbinic motifs, psychological subtext, "
+            "and dialogues recorded in Midrash Rabbah, Tanchuma, and the Talmud (e.g., Satan's testing, Sarah's perspective, aggadic debates)."
+        )
+        layer_num += 1
+    else:
+        layers.append(
+            f"{layer_num}. Omit Rabbinic Midrash: Do not include rabbinic aggadah, midrashic debates, or post-biblical Jewish legends."
+        )
+        layer_num += 1
 
-Maintain a clear distinction between the primary biblical narrative and secondary 
-historical/legendary traditions without breaking dramatic immersion.
+    if perspectives.include_patristic:
+        layers.append(
+            f"{layer_num}. Patristic Typology (NT): Weave in the theological and symbolic lens of the Early "
+            "Church Fathers where relevant (e.g., sacrificial imagery, prophetic fulfillment, sacramental typology)."
+        )
+        layer_num += 1
+    else:
+        layers.append(
+            f"{layer_num}. Omit Patristic Typology: Do not introduce Christian allegorical readings, patristic typologies, or New Testament fulfillment motifs."
+        )
+        layer_num += 1
+
+    if perspectives.include_historical:
+        layers.append(
+            f"{layer_num}. Material & Political Reality (Josephus): Ground the setting, sensory details, "
+            "military realities, topography, and political tensions using the historical records of Flavius Josephus and ancient Near Eastern antiquity."
+        )
+        layer_num += 1
+    else:
+        layers.append(
+            f"{layer_num}. Omit Historical Speculation: Do not weave in external Greco-Roman or Josephus historiographical additions."
+        )
+        layer_num += 1
+
+    if perspectives.narrative_tone == "scholarly":
+        tone_instruction = (
+            "Voice and Format: Present the synthesis in a rigorous, scholarly commentary style. "
+            "Examine how each tradition interprets the pericope, comparing differences, theological nuances, and historical context."
+        )
+    elif perspectives.narrative_tone == "meditative":
+        tone_instruction = (
+            "Voice and Format: Present the synthesis in a contemplative, reflective devotional tone. "
+            "Focus on the inner spiritual journey, existential weight, and ethical lessons of the text and traditions."
+        )
+    else:  # dramatic
+        tone_instruction = (
+            "Voice and Format: Present the synthesis as an evocative, immersive literary drama. "
+            "Maintain dramatic tension, vivid sensory imagery, and psychological depth while maintaining clear distinctions between biblical anchor and interpretive traditions."
+        )
+
+    layers_text = "\n".join(layers)
+
+    return f"""You are an expert biblical historian, exegete, and narrative writer.
+Synthesize the provided biblical narrative with its ancient interpretive and cultural layers according to the following guidelines:
+
+{layers_text}
+
+{tone_instruction}
 """
 
 def retrieve_context(query: str, num_results: int = 3):
@@ -158,12 +216,13 @@ def generate_narrative(request: QueryRequest):
         sources, context_str = retrieve_context(request.query, request.num_results)
         prompt = f"{context_str}\n\nUser Request: {request.query}\n\nGenerate the contextual narrative:"
         target_model = request.model or os.environ.get("NARRATIVE_MODEL", "gemini-4-argon")
+        system_instruction = build_system_instruction(request.perspectives)
 
         generation = ai_client.models.generate_content(
             model=target_model,
             contents=prompt,
             config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
+                system_instruction=system_instruction,
                 temperature=0.7
             )
         )
@@ -171,6 +230,7 @@ def generate_narrative(request: QueryRequest):
         response_data = NarrativeResponse(
             share_id=str(uuid.uuid4()),
             model_used=target_model,
+            perspectives=request.perspectives,
             narrative=generation.text,
             sources=sources
         )
@@ -196,13 +256,15 @@ def generate_narrative_stream(request: QueryRequest):
         prompt = f"{context_str}\n\nUser Request: {request.query}\n\nGenerate the contextual narrative:"
         target_model = request.model or os.environ.get("NARRATIVE_MODEL", "gemini-4-argon")
         share_id = str(uuid.uuid4())
+        system_instruction = build_system_instruction(request.perspectives)
 
         def event_stream():
-            # Emit immediate metadata event so frontend renders canonical source cards instantly
+            # Emit immediate metadata event so frontend renders canonical source cards and perspective tags instantly
             init_payload = {
                 "type": "metadata",
                 "share_id": share_id,
                 "model_used": target_model,
+                "perspectives": request.perspectives.model_dump(),
                 "sources": [s.model_dump() for s in sources]
             }
             yield f"data: {json.dumps(init_payload)}\n\n"
@@ -213,7 +275,7 @@ def generate_narrative_stream(request: QueryRequest):
                     model=target_model,
                     contents=prompt,
                     config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_INSTRUCTION,
+                        system_instruction=system_instruction,
                         temperature=0.7
                     )
                 )
@@ -234,6 +296,7 @@ def generate_narrative_stream(request: QueryRequest):
                         narrative_obj = NarrativeResponse(
                             share_id=share_id,
                             model_used=target_model,
+                            perspectives=request.perspectives,
                             narrative=completed_text,
                             sources=sources
                         )
