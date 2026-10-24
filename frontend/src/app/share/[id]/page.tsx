@@ -52,7 +52,8 @@ export default function SharedNarrative() {
 
     const fetchShared = async () => {
       try {
-        const res = await fetch(`http://127.0.0.1:8000/shared/${id}`);
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+        const res = await fetch(`${apiBase}/shared/${id}`);
         if (!res.ok) {
           const errData = await res.json().catch(() => null);
           throw new Error(errData?.detail || "Narrative not found.");

@@ -1,0 +1,15 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-f'
+      - 'Dockerfile.frontend'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_API_URL=$_NEXT_PUBLIC_API_URL'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/mtsbe-1208613/mtsbe-repo/mtsbe-frontend:latest'
+      - '.'
+images:
+  - 'us-central1-docker.pkg.dev/mtsbe-1208613/mtsbe-repo/mtsbe-frontend:latest'
+substitutions:
+  _NEXT_PUBLIC_API_URL: ''

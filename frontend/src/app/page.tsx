@@ -61,7 +61,8 @@ export default function Home() {
     setResult(null);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/generate/stream", {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+      const res = await fetch(`${apiBase}/generate/stream`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

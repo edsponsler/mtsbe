@@ -43,22 +43,38 @@ except Exception as e:
     bucket = None
 
 # Database connection details
-DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
+INSTANCE_CONNECTION_NAME = os.environ.get("INSTANCE_CONNECTION_NAME")
+DB_HOST = os.environ.get("DB_HOST", f"/cloudsql/{INSTANCE_CONNECTION_NAME}" if INSTANCE_CONNECTION_NAME else "127.0.0.1")
 DB_PORT = os.environ.get("DB_PORT", "5432")
 DB_NAME = os.environ.get("DB_NAME", "mtsbe_data")
 DB_USER = os.environ.get("DB_USER", "postgres")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", "ChangeThisStrongPassword123!")
 
 def get_db_connection():
-    conn = psycopg2.connect(
-        host=DB_HOST,
-        port=DB_PORT,
-        dbname=DB_NAME,
-        user=DB_USER,
-        password=DB_PASSWORD
-    )
+    conn_params = {
+        "dbname": DB_NAME,
+        "user": DB_USER,
+        "password": DB_PASSWORD,
+        "host": DB_HOST
+    }
+    if not DB_HOST.startswith("/"):
+        conn_params["port"] = DB_PORT
+    conn = psycopg2.connect(**conn_params)
     register_vector(conn)
     return conn
+
+@app.get("/")
+def root():
+    return {
+        "status": "healthy",
+        "service": "mtsbe-api",
+        "model": os.environ.get("NARRATIVE_MODEL", "gemini-4-argon"),
+        "version": "1.0.0"
+    }
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 # Request/Response Models
 class PerspectiveConfig(BaseModel):

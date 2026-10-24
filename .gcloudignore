@@ -1,0 +1,11 @@
+.git
+.github
+.venv
+__pycache__
+*.pyc
+data/raw
+data/processed
+frontend/node_modules
+frontend/.next
+.env
+.env.local
