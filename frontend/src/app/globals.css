@@ -339,3 +339,54 @@ h1, h2, h3, h4, h5, h6 {
   width: 100%;
   animation: fadeIn 0.3s ease;
 }
+
+/* Streaming Elements */
+.streaming-cursor {
+  display: inline-block;
+  width: 9px;
+  height: 1.15em;
+  background-color: var(--accent-gold);
+  margin-left: 4px;
+  vertical-align: -0.15em;
+  border-radius: 2px;
+  animation: cursorBlink 0.8s infinite cubic-bezier(0.4, 0, 0.6, 1);
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.7);
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.streaming-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 12px;
+  background: rgba(212, 175, 55, 0.12);
+  color: var(--accent-gold);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  animation: fadeIn 0.3s ease;
+}
+
+.streaming-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--accent-gold);
+  box-shadow: 0 0 6px var(--accent-gold);
+  animation: pulse 1s infinite alternate;
+}
+
+.streaming-placeholder {
+  color: var(--text-secondary);
+  font-style: italic;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+

@@ -21,19 +21,21 @@ interface NarrativeResponse {
 export default function Home() {
   const [query, setQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [result, setResult] = useState<NarrativeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim()) return;
+    if (!query.trim() || isLoading || isStreaming) return;
 
     setIsLoading(true);
+    setIsStreaming(false);
     setError(null);
     setResult(null);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/generate", {
+      const res = await fetch("http://127.0.0.1:8000/generate/stream", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -49,13 +51,70 @@ export default function Home() {
         throw new Error(errData?.detail || `Server error: ${res.status}`);
       }
 
-      const data: NarrativeResponse = await res.json();
-      setResult(data);
+      if (!res.body) {
+        throw new Error("Streaming is not supported by your browser or connection.");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+
+      const processLine = (line: string) => {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data: ")) return;
+        const jsonStr = trimmed.slice(6);
+        try {
+          const event = JSON.parse(jsonStr);
+          if (event.type === "metadata") {
+            setIsLoading(false);
+            setIsStreaming(true);
+            setResult({
+              share_id: event.share_id,
+              model_used: event.model_used,
+              narrative: "",
+              sources: event.sources || [],
+            });
+          } else if (event.type === "chunk") {
+            setResult((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                narrative: prev.narrative + (event.text || ""),
+              };
+            });
+          } else if (event.type === "done") {
+            setIsStreaming(false);
+          } else if (event.type === "error") {
+            setError(event.detail || "An error occurred during narrative generation.");
+            setIsStreaming(false);
+          }
+        } catch (e) {
+          console.error("Failed to parse SSE line:", line, e);
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          processLine(line);
+        }
+      }
+
+      if (buffer.trim()) {
+        processLine(buffer);
+      }
     } catch (err: any) {
       console.error(err);
       setError(err.message || "An unexpected error occurred while fetching the narrative.");
     } finally {
       setIsLoading(false);
+      setIsStreaming(false);
     }
   };
 
@@ -71,17 +130,17 @@ export default function Home() {
           <input
             type="text"
             className="search-input"
-            placeholder="Explore the scriptures... (e.g., Adam and Eve biting the apple)"
+            placeholder="Explore the scriptures... (e.g., Abraham meets three wandering figures)"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            disabled={isLoading}
+            disabled={isLoading || isStreaming}
           />
           <button 
             type="submit" 
             className="search-button"
-            disabled={isLoading || !query.trim()}
+            disabled={isLoading || isStreaming || !query.trim()}
           >
-            Seek
+            {isLoading ? "Consulting..." : isStreaming ? "Weaving..." : "Seek"}
           </button>
         </form>
       </div>
@@ -92,14 +151,14 @@ export default function Home() {
         </div>
       )}
 
-      {isLoading && (
+      {isLoading && !result && (
         <div className="loader-container">
           <div className="spinner"></div>
           <div className="loader-text">Consulting the ancient texts with Gemini 4 Argon...</div>
         </div>
       )}
 
-      {result && !isLoading && (
+      {result && (
         <div className="results-container">
           <div className="narrative-card">
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
@@ -115,8 +174,15 @@ export default function Home() {
                   {result.model_used}
                 </span>
               )}
+              {isStreaming && (
+                <span className="streaming-badge">
+                  <span className="streaming-dot" />
+                  Streaming Live
+                </span>
+              )}
             </div>
-            {result.share_id && (
+
+            {result.share_id && !isStreaming && (
               <button 
                 className="search-button" 
                 style={{ position: 'absolute', top: '2rem', right: '2rem', padding: '0.5rem 1rem', fontSize: '0.9rem' }}
@@ -129,10 +195,23 @@ export default function Home() {
                 Copy Share Link
               </button>
             )}
+
             <div className="narrative-content">
-              {result.narrative.split("\n\n").map((para, i) => (
-                <p key={i}>{para}</p>
-              ))}
+              {result.narrative ? (
+                result.narrative.split("\n\n").map((para, i, arr) => (
+                  <p key={i}>
+                    {para}
+                    {isStreaming && i === arr.length - 1 && (
+                      <span className="streaming-cursor" aria-hidden="true" />
+                    )}
+                  </p>
+                ))
+              ) : isStreaming ? (
+                <p className="streaming-placeholder">
+                  <span>Synthesizing biblical narrative and ancient traditions...</span>
+                  <span className="streaming-cursor" aria-hidden="true" />
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -157,3 +236,5 @@ export default function Home() {
     </main>
   );
 }
+
+

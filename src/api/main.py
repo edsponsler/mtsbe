@@ -3,6 +3,7 @@ import json
 import uuid
 from google.cloud import storage
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import psycopg2
 from pgvector.psycopg2 import register_vector
@@ -78,65 +79,7 @@ class NarrativeResponse(BaseModel):
     narrative: str
     sources: list[SourceContext]
 
-@app.post("/generate", response_model=NarrativeResponse)
-def generate_narrative(request: QueryRequest):
-    if not ai_client:
-        raise HTTPException(status_code=500, detail="Vertex AI client not initialized. Check ADC credentials.")
-
-    try:
-        # Step 1: Embed the user query
-        embed_response = ai_client.models.embed_content(
-            model="gemini-embedding-2",
-            contents=request.query,
-            config=types.EmbedContentConfig(
-                task_type="RETRIEVAL_QUERY",
-                output_dimensionality=768
-            )
-        )
-        query_embedding = embed_response.embeddings[0].values
-
-        # Step 2: Retrieve relevant pericopes using pgvector
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        # We use <-> for L2 distance (or <=> for cosine distance). HNSW index uses vector_l2_ops by default.
-        cur.execute("""
-            SELECT id, pericope_title, english_text, text as hebrew_text, external_links, embedding <-> %s::vector AS distance
-            FROM pericopes
-            ORDER BY distance LIMIT %s
-        """, (query_embedding, request.num_results))
-        
-        results = cur.fetchall()
-        cur.close()
-        conn.close()
-
-        if not results:
-            raise HTTPException(status_code=404, detail="No relevant context found.")
-
-        # Step 3: Format the context for the LLM
-        sources = []
-        context_str = "--- BIBLICAL CONTEXT ---\n"
-        for row in results:
-            p_id, title, english_text, hebrew_text, links, dist = row
-            midrash = links.get('midrash', []) if isinstance(links, dict) else []
-            
-            # Use english_text if available, fallback to hebrew_text for safety
-            display_text = english_text if english_text else hebrew_text
-
-            sources.append(SourceContext(
-                id=p_id,
-                title=title or "Unknown Pericope",
-                text=display_text,
-                hebrew_text=hebrew_text,
-                midrash_links=midrash
-            ))
-            
-            context_str += f"\nPericope: {title}\nText: {display_text}\n"
-            if midrash:
-                context_str += f"Associated Midrash references: {', '.join(midrash)}\n"
-        
-        # Step 4: Generate the narrative using Gemini
-        system_instruction = """
+SYSTEM_INSTRUCTION = """
 You are an expert biblical historian, exegete, and narrative writer.
 Synthesize the provided biblical narrative with its ancient interpretive and cultural layers:
 
@@ -151,16 +94,76 @@ Synthesize the provided biblical narrative with its ancient interpretive and cul
 Maintain a clear distinction between the primary biblical narrative and secondary 
 historical/legendary traditions without breaking dramatic immersion.
 """
+
+def retrieve_context(query: str, num_results: int = 3):
+    if not ai_client:
+        raise HTTPException(status_code=500, detail="Vertex AI client not initialized. Check ADC credentials.")
+
+    # Step 1: Embed the user query
+    embed_response = ai_client.models.embed_content(
+        model="gemini-embedding-2",
+        contents=query,
+        config=types.EmbedContentConfig(
+            task_type="RETRIEVAL_QUERY",
+            output_dimensionality=768
+        )
+    )
+    query_embedding = embed_response.embeddings[0].values
+
+    # Step 2: Retrieve relevant pericopes using pgvector
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    # We use <-> for L2 distance (or <=> for cosine distance). HNSW index uses vector_l2_ops by default.
+    cur.execute("""
+        SELECT id, pericope_title, english_text, text as hebrew_text, external_links, embedding <-> %s::vector AS distance
+        FROM pericopes
+        ORDER BY distance LIMIT %s
+    """, (query_embedding, num_results))
+    
+    results = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    if not results:
+        raise HTTPException(status_code=404, detail="No relevant context found.")
+
+    # Step 3: Format the context for the LLM
+    sources = []
+    context_str = "--- BIBLICAL CONTEXT ---\n"
+    for row in results:
+        p_id, title, english_text, hebrew_text, links, dist = row
+        midrash = links.get('midrash', []) if isinstance(links, dict) else []
         
+        # Use english_text if available, fallback to hebrew_text for safety
+        display_text = english_text if english_text else hebrew_text
+
+        sources.append(SourceContext(
+            id=p_id,
+            title=title or "Unknown Pericope",
+            text=display_text,
+            hebrew_text=hebrew_text,
+            midrash_links=midrash
+        ))
+        
+        context_str += f"\nPericope: {title}\nText: {display_text}\n"
+        if midrash:
+            context_str += f"Associated Midrash references: {', '.join(midrash)}\n"
+
+    return sources, context_str
+
+@app.post("/generate", response_model=NarrativeResponse)
+def generate_narrative(request: QueryRequest):
+    try:
+        sources, context_str = retrieve_context(request.query, request.num_results)
         prompt = f"{context_str}\n\nUser Request: {request.query}\n\nGenerate the contextual narrative:"
-        
         target_model = request.model or os.environ.get("NARRATIVE_MODEL", "gemini-4-argon")
-        
+
         generation = ai_client.models.generate_content(
             model=target_model,
             contents=prompt,
             config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
+                system_instruction=SYSTEM_INSTRUCTION,
                 temperature=0.7
             )
         )
@@ -181,6 +184,82 @@ historical/legendary traditions without breaking dramatic immersion.
 
         return response_data
 
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/generate/stream")
+def generate_narrative_stream(request: QueryRequest):
+    try:
+        sources, context_str = retrieve_context(request.query, request.num_results)
+        prompt = f"{context_str}\n\nUser Request: {request.query}\n\nGenerate the contextual narrative:"
+        target_model = request.model or os.environ.get("NARRATIVE_MODEL", "gemini-4-argon")
+        share_id = str(uuid.uuid4())
+
+        def event_stream():
+            # Emit immediate metadata event so frontend renders canonical source cards instantly
+            init_payload = {
+                "type": "metadata",
+                "share_id": share_id,
+                "model_used": target_model,
+                "sources": [s.model_dump() for s in sources]
+            }
+            yield f"data: {json.dumps(init_payload)}\n\n"
+
+            full_narrative = []
+            try:
+                stream = ai_client.models.generate_content_stream(
+                    model=target_model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        temperature=0.7
+                    )
+                )
+                for chunk in stream:
+                    if chunk.text:
+                        full_narrative.append(chunk.text)
+                        chunk_payload = {
+                            "type": "chunk",
+                            "text": chunk.text
+                        }
+                        yield f"data: {json.dumps(chunk_payload)}\n\n"
+
+                completed_text = "".join(full_narrative)
+
+                # Persist completed narrative to GCS for shareable permalinks
+                if bucket:
+                    try:
+                        narrative_obj = NarrativeResponse(
+                            share_id=share_id,
+                            model_used=target_model,
+                            narrative=completed_text,
+                            sources=sources
+                        )
+                        blob = bucket.blob(f"{share_id}.json")
+                        blob.upload_from_string(narrative_obj.model_dump_json(), content_type="application/json")
+                    except Exception as e:
+                        print(f"Failed to upload streaming narrative to GCS: {e}")
+
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+            except Exception as e:
+                err_payload = {"type": "error", "detail": str(e)}
+                yield f"data: {json.dumps(err_payload)}\n\n"
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
