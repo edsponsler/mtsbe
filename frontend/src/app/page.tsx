@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ExpandableText } from "./components/ExpandableText";
 
 // Types corresponding to our API
 interface SourceContext {
@@ -359,7 +360,7 @@ export default function Home() {
               <div key={index} className="source-card">
                 <h5 className="source-title">{source.title}</h5>
                 <span className="source-id">{source.id}</span>
-                <p className="source-text">{source.text}</p>
+                <ExpandableText text={source.text} initialClamp={4} />
                 {source.hebrew_text && (
                   <details style={{marginTop: '1rem', cursor: 'pointer', fontSize: '0.85rem', color: 'rgba(212, 175, 55, 0.8)'}}>
                     <summary style={{fontWeight: '500'}}>View Original Language (Hebrew)</summary>
@@ -382,7 +383,7 @@ export default function Home() {
                     </div>
                     <h5 className="source-title" style={{ fontSize: '1.05rem' }}>{comm.title}</h5>
                     <div className="commentary-author">{comm.author} — {comm.work}</div>
-                    <p className="source-text" style={{ WebkitLineClamp: 5 }}>{comm.text}</p>
+                    <ExpandableText text={comm.text} initialClamp={5} />
                     {comm.original_language_text && (
                       <details style={{marginTop: '1rem', cursor: 'pointer', fontSize: '0.85rem', color: 'rgba(212, 175, 55, 0.8)'}}>
                         <summary style={{fontWeight: '500'}}>View Original Language</summary>
